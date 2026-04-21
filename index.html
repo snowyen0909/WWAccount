@@ -2,7 +2,8 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>鳴潮內容管理終端</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鳴潮帳號管理終端</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0d0d0f; font-family: 'Inter', system-ui, sans-serif; }
@@ -11,9 +12,15 @@
         details > summary { list-style: none; }
         details > summary::-webkit-details-marker { display: none; }
         .char-bg { mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); }
+        .modal-bg { background-color: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); }
+        
+        /* 自訂滾動條給刪除列表使用 */
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #16171a; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
     </style>
 </head>
-<body class="text-gray-300 p-4 md:p-10">
+<body class="text-gray-300 p-4 md:p-10 relative">
 
     <div class="max-w-5xl mx-auto">
         <header class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -24,7 +31,12 @@
                     正在連線至雙數據庫...
                 </p>
             </div>
-            <button onclick="fetchData()" class="text-xs border border-gray-700 bg-gray-800 px-4 py-2 rounded-lg hover:bg-white hover:text-black transition shadow-lg font-bold">↻ 強制同步數據</button>
+            <div class="flex gap-3">
+                <button onclick="openManageModal()" class="flex items-center gap-1 text-sm bg-gray-800 border border-gray-600 px-4 py-2 rounded-lg text-white hover:bg-gray-700 hover:border-yellow-500 transition shadow-lg font-bold">
+                    ⚙️ 系統管理
+                </button>
+                <button onclick="fetchData()" class="text-xs border border-gray-700 bg-gray-800 px-4 py-2 rounded-lg hover:bg-white hover:text-black transition shadow-lg font-bold">↻ 強制同步</button>
+            </div>
         </header>
 
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 border-b border-gray-800 pb-5">
@@ -33,16 +45,9 @@
                 <button onclick="applyFilter('has6')" id="btn-has6" class="px-4 py-2 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">包含滿命 (6鏈)</button>
                 <button onclick="applyFilter('no6')" id="btn-no6" class="px-4 py-2 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">無滿命</button>
             </div>
-            
             <div class="w-full md:w-72 relative group">
-                <input 
-                    type="text" 
-                    id="search-input" 
-                    onkeyup="handleSearch()" 
-                    placeholder="搜尋角色名稱 (例如: 西格莉卡)" 
-                    class="w-full bg-gray-900 border border-gray-700 text-white text-sm px-4 py-2 rounded-lg focus:outline-none focus:border-yellow-500 transition placeholder-gray-600"
-                >
-                <svg xmlns="http://www.w3.org/2000/svg" class="absolute right-3 top-2.5 h-5 w-5 text-gray-500 group-focus-within:text-yellow-500 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <input type="text" id="search-input" onkeyup="handleSearch()" placeholder="搜尋角色名稱 (例如: 西格莉卡)" class="w-full bg-gray-900 border border-gray-700 text-white text-sm px-4 py-2 rounded-lg focus:outline-none focus:border-yellow-500 transition placeholder-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="absolute right-3 top-2.5 h-5 w-5 text-gray-500 group-focus-within:text-yellow-500 transition pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
             </div>
@@ -53,20 +58,73 @@
         <div id="account-list" class="space-y-6"></div>
         
         <div id="empty-state" class="hidden text-center py-20 bg-gray-900/30 border border-gray-800 rounded-2xl border-dashed">
-            <div class="text-4xl mb-3 opacity-50">🔍</div>
-            <p class="text-gray-400 text-lg font-bold">找不到符合條件的帳號</p>
-            <p class="text-gray-600 text-sm mt-1">請嘗試清除搜尋條件或切換篩選器</p>
+            <div class="text-4xl mb-3 opacity-50">🗃️</div>
+            <p class="text-gray-400 text-lg font-bold">目前沒有符合條件的帳號</p>
+            <p class="text-gray-600 text-sm mt-1">點擊上方「⚙️ 系統管理」來新增資料吧！</p>
+        </div>
+    </div>
+
+    <div id="manage-modal" class="hidden fixed inset-0 z-50 modal-bg flex items-center justify-center p-4">
+        <div class="bg-[#16171a] border border-gray-700 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-[#0d0d0f]">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">⚙️ 系統管理控制台</h2>
+                <button onclick="closeManageModal()" class="text-gray-500 hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+
+            <div class="flex border-b border-gray-800 bg-[#1a1c23]">
+                <button onclick="switchTab('tab-single')" id="btn-tab-single" class="flex-1 py-3 text-sm font-bold text-yellow-500 border-b-2 border-yellow-500 transition">單筆新增</button>
+                <button onclick="switchTab('tab-bulk')" id="btn-tab-bulk" class="flex-1 py-3 text-sm font-bold text-gray-500 hover:text-gray-300 border-b-2 border-transparent transition">批量 JSON 匯入</button>
+                <button onclick="switchTab('tab-delete')" id="btn-tab-delete" class="flex-1 py-3 text-sm font-bold text-gray-500 hover:text-red-400 border-b-2 border-transparent transition">刪除帳號</button>
+            </div>
+
+            <div class="p-6 overflow-y-auto custom-scroll flex-1">
+                
+                <div id="tab-single" class="space-y-4 block">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">遊戲帳號 (不含後綴)</label>
+                        <input type="text" id="new-acc" placeholder="例如: unpwebt218" class="w-full bg-black border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-yellow-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">遊戲密碼</label>
+                        <input type="text" id="new-pwd" placeholder="例如: jltw05y1j" class="w-full bg-black border border-gray-700 rounded-lg px-3 py-2 text-yellow-500 font-mono focus:border-yellow-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">角色配置 (以逗號分隔)</label>
+                        <textarea id="new-config" placeholder="例如: 6+1西格莉卡, 0+0仇遠" class="w-full h-24 bg-black border border-gray-700 rounded-lg px-3 py-2 text-blue-400 font-mono focus:border-yellow-500 outline-none resize-none"></textarea>
+                    </div>
+                    <button onclick="saveSingleAccount()" class="w-full py-2.5 mt-2 rounded-lg text-sm font-bold bg-yellow-600 text-black hover:bg-yellow-500 transition shadow-lg">儲存並上傳</button>
+                </div>
+
+                <div id="tab-bulk" class="space-y-4 hidden">
+                    <div class="bg-blue-900/20 border border-blue-800/50 p-3 rounded-lg text-xs text-blue-300">
+                        請貼上標準的 JSON 陣列格式。新匯入的帳號會被添加到現有資料的<b>最前面</b>。
+                    </div>
+                    <div>
+                        <textarea id="bulk-json" placeholder='[\n  {\n    "帳號": "abc001",\n    "密碼": "pass123",\n    "內容配置": ["0+0長離"]\n  }\n]' class="w-full h-48 bg-black border border-gray-700 rounded-lg px-3 py-2 text-green-400 font-mono focus:border-yellow-500 outline-none resize-none text-xs"></textarea>
+                    </div>
+                    <button onclick="saveBulkAccounts()" class="w-full py-2.5 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-500 transition shadow-lg">驗證並批量寫入</button>
+                </div>
+
+                <div id="tab-delete" class="hidden">
+                    <div class="bg-red-900/20 border border-red-800/50 p-3 rounded-lg text-xs text-red-300 mb-4">
+                        ⚠️ 警告：點擊刪除後將直接從資料庫移除，請小心操作。
+                    </div>
+                    <div id="delete-list-container" class="space-y-2">
+                        </div>
+                </div>
+
+            </div>
         </div>
     </div>
 
     <script>
-        const ACC_API_URL = 'https://raw.githubusercontent.com/snowyen0909/loon-2/refs/heads/main/Kl.json';
+        // ⚠️ 替換成你的 Cloudflare Worker 網址
+        const ACC_API_URL = 'https://wuwa-api.andy96990808.workers.dev'; 
         const IMG_API_URL = 'https://raw.githubusercontent.com/snowyen0909/loon-2/refs/heads/main/Klp.json';
 
         let charImages = {};
         let allAccountsData = [];
-        
-        // 狀態管理：同時記錄「按鈕狀態」與「搜尋文字」
         let currentFilter = 'all';
         let searchQuery = '';
 
@@ -94,16 +152,14 @@
                 if (!imgRes.ok) throw new Error(`無法讀取圖片資料 (HTTP ${imgRes.status})`);
 
                 let accData, imgData;
-                try { accData = await accRes.json(); } catch (e) { throw new Error(`【帳號檔案 Kl.json 解析失敗】\n${e.message}`); }
-                try { imgData = await imgRes.json(); } catch (e) { throw new Error(`【圖片檔案 Klp.json 解析失敗】\n${e.message}`); }
+                try { accData = await accRes.json(); } catch (e) { throw new Error(`帳號檔案解析失敗\n${e.message}`); }
+                try { imgData = await imgRes.json(); } catch (e) { throw new Error(`圖片檔案解析失敗\n${e.message}`); }
 
                 charImages = imgData; 
                 allAccountsData = Array.isArray(accData) ? accData : [accData];
                 
-                // 初始渲染
                 updateView();
-                statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500"></span> 數據與圖庫已同步`;
-                
+                statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500"></span> 數據已同步`;
             } catch (err) {
                 statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 連線失敗`;
                 errorBox.classList.remove('hidden');
@@ -111,126 +167,230 @@
             }
         }
 
-        function parseConfig(str) {
-            const match = str.match(/^(\d+)\+(\d+)(.+)$/);
-            if (match) {
-                return { chain: match[1], weapon: match[2], name: match[3] };
+        // 共用安全上傳核心函數 (統一處理密碼與 Fetch POST)
+        async function syncDataToServer(newDataArray, successMessage) {
+            const adminPass = prompt("🛡️ 寫入雲端資料庫需要權限。\n請輸入管理員密碼：");
+            if (adminPass === null || adminPass.trim() === '') return; 
+
+            document.getElementById('status').innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> 正在更新雲端...`;
+
+            try {
+                const res = await fetch(ACC_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Password': adminPass
+                    },
+                    body: JSON.stringify(newDataArray)
+                });
+
+                if (res.status === 401) {
+                    alert("❌ 密碼錯誤，權限被拒絕！");
+                    document.getElementById('status').innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 驗證失敗`;
+                    return;
+                }
+                if (!res.ok) throw new Error("伺服器錯誤");
+
+                alert(`✅ ${successMessage}`);
+                closeManageModal();
+                fetchData(); // 重新抓取並刷新畫面
+
+            } catch (err) {
+                alert("❌ 更新失敗：" + err.message);
+                document.getElementById('status').innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 更新失敗`;
             }
-            return { chain: '?', weapon: '?', name: str };
         }
 
-        // 點擊篩選按鈕
+        /* --- ⚙️ 控制台 UI 邏輯 --- */
+        function openManageModal() { 
+            document.getElementById('manage-modal').classList.remove('hidden'); 
+            switchTab('tab-single'); // 預設打開單筆新增
+        }
+        function closeManageModal() { 
+            document.getElementById('manage-modal').classList.add('hidden'); 
+        }
+
+        function switchTab(tabId) {
+            // 隱藏所有內容
+            ['tab-single', 'tab-bulk', 'tab-delete'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+                document.getElementById('btn-' + id).className = "flex-1 py-3 text-sm font-bold text-gray-500 hover:text-gray-300 border-b-2 border-transparent transition";
+            });
+            // 顯示目標內容與按鈕高亮
+            document.getElementById(tabId).classList.remove('hidden');
+            document.getElementById(tabId).classList.add('block');
+            
+            const activeBtn = document.getElementById('btn-' + tabId);
+            if(tabId === 'tab-single') activeBtn.className = "flex-1 py-3 text-sm font-bold text-yellow-500 border-b-2 border-yellow-500 transition";
+            if(tabId === 'tab-bulk') activeBtn.className = "flex-1 py-3 text-sm font-bold text-blue-400 border-b-2 border-blue-400 transition";
+            if(tabId === 'tab-delete') activeBtn.className = "flex-1 py-3 text-sm font-bold text-red-500 border-b-2 border-red-500 transition";
+
+            // 如果是刪除分頁，動態渲染列表
+            if(tabId === 'tab-delete') renderDeleteList();
+        }
+
+        /* --- 功能 1：單筆新增 --- */
+        function saveSingleAccount() {
+            const acc = document.getElementById('new-acc').value.trim();
+            const pwd = document.getElementById('new-pwd').value.trim();
+            const configRaw = document.getElementById('new-config').value.trim();
+
+            if(!acc || !pwd || !configRaw) return alert("⚠️ 請填寫完整資訊！");
+
+            const configArray = configRaw.split(',').map(item => item.trim()).filter(item => item !== "");
+            const newAccountObj = { "帳號": acc, "密碼": pwd, "內容配置": configArray };
+            
+            // 加入到陣列最前面
+            const updatedData = [newAccountObj, ...allAccountsData];
+            syncDataToServer(updatedData, "單筆帳號已成功寫入雲端！");
+            
+            // 清空輸入框
+            document.getElementById('new-acc').value = '';
+            document.getElementById('new-pwd').value = '';
+            document.getElementById('new-config').value = '';
+        }
+
+        /* --- 功能 2：批量匯入 --- */
+        function saveBulkAccounts() {
+            const rawJson = document.getElementById('bulk-json').value.trim();
+            if(!rawJson) return alert("⚠️ 請輸入 JSON 數據！");
+
+            try {
+                let parsedData = JSON.parse(rawJson);
+                // 容錯處理：如果只貼了一個物件，自動轉成陣列
+                if (!Array.isArray(parsedData)) parsedData = [parsedData];
+                
+                // 簡單檢查格式
+                if (!parsedData[0]["帳號"] || !parsedData[0]["內容配置"]) {
+                    throw new Error("JSON 格式缺少必要的 '帳號' 或 '內容配置' 欄位");
+                }
+
+                // 將新陣列加到舊陣列前面
+                const updatedData = [...parsedData, ...allAccountsData];
+                syncDataToServer(updatedData, `成功批量匯入 ${parsedData.length} 筆帳號！`);
+                document.getElementById('bulk-json').value = '';
+
+            } catch (e) {
+                alert("❌ JSON 解析失敗，請檢查格式：\n" + e.message);
+            }
+        }
+
+        /* --- 功能 3：刪除帳號 --- */
+        function renderDeleteList() {
+            const container = document.getElementById('delete-list-container');
+            if (allAccountsData.length === 0) {
+                container.innerHTML = `<p class="text-center text-gray-500 py-4">目前沒有任何帳號可刪除</p>`;
+                return;
+            }
+
+            container.innerHTML = allAccountsData.map((acc, index) => `
+                <div class="flex justify-between items-center bg-black/50 border border-gray-800 p-3 rounded-lg">
+                    <div>
+                        <p class="text-sm text-white font-bold">${acc["帳號"]}@outlook.com</p>
+                        <p class="text-[10px] text-gray-500 mt-1 truncate w-48">${acc["內容配置"].join(' / ')}</p>
+                    </div>
+                    <button onclick="confirmDelete(${index})" class="bg-red-900/50 hover:bg-red-600 text-red-300 hover:text-white border border-red-800 px-3 py-1 rounded text-xs font-bold transition">
+                        🗑️ 刪除
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function confirmDelete(index) {
+            const accName = allAccountsData[index]["帳號"];
+            if (confirm(`⚠️ 確定要永久刪除 [ ${accName} ] 嗎？\n此操作無法復原！`)) {
+                // 複製一份舊陣列並移除該索引的資料
+                const updatedData = [...allAccountsData];
+                updatedData.splice(index, 1);
+                
+                syncDataToServer(updatedData, `帳號 [ ${accName} ] 已成功刪除！`);
+            }
+        }
+
+        /* --- 渲染與篩選 --- */
+        function parseConfig(str) {
+            const match = str.trim().match(/^(\d+)\+(\d+)(.+)$/);
+            if (match) return { chain: match[1], weapon: match[2], name: match[3].trim() };
+            return { chain: '?', weapon: '?', name: str.trim() };
+        }
+
         function applyFilter(type) {
             currentFilter = type;
-            
-            // 更新按鈕樣式
             const btns = ['all', 'has6', 'no6'];
             btns.forEach(id => {
                 const btn = document.getElementById('btn-' + id);
-                if (id === type) {
-                    btn.className = "px-4 py-2 rounded-lg text-sm font-bold bg-white text-black transition shadow-md";
-                } else {
-                    btn.className = "px-4 py-2 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition";
-                }
+                btn.className = id === type 
+                    ? "px-4 py-2 rounded-lg text-sm font-bold bg-white text-black transition shadow-md"
+                    : "px-4 py-2 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition";
             });
-
-            updateView(); // 觸發統一更新
+            updateView();
         }
 
-        // 在搜尋框輸入文字
         function handleSearch() {
             searchQuery = document.getElementById('search-input').value.trim().toLowerCase();
-            updateView(); // 觸發統一更新
+            updateView();
         }
 
-        // 核心邏輯：結合「按鈕篩選」與「文字搜尋」
         function updateView() {
             let filteredData = allAccountsData;
-
-            // 1. 先過濾按鈕條件 (滿命/無滿命)
-            if (currentFilter === 'has6') {
-                filteredData = filteredData.filter(acc => acc["內容配置"].some(item => parseConfig(item).chain === '6'));
-            } else if (currentFilter === 'no6') {
-                filteredData = filteredData.filter(acc => !acc["內容配置"].some(item => parseConfig(item).chain === '6'));
-            }
-
-            // 2. 再過濾搜尋文字 (若有輸入)
+            if (currentFilter === 'has6') filteredData = filteredData.filter(acc => acc["內容配置"] && acc["內容配置"].some(item => parseConfig(item).chain === '6'));
+            if (currentFilter === 'no6') filteredData = filteredData.filter(acc => acc["內容配置"] && !acc["內容配置"].some(item => parseConfig(item).chain === '6'));
             if (searchQuery !== '') {
-                filteredData = filteredData.filter(acc => {
-                    // 檢查該帳號的「內容配置」中，是否有角色的名稱包含搜尋字串
-                    return acc["內容配置"].some(item => {
-                        const info = parseConfig(item);
-                        return info.name.toLowerCase().includes(searchQuery);
-                    });
-                });
+                filteredData = filteredData.filter(acc => acc["內容配置"] && acc["內容配置"].some(item => parseConfig(item).name.toLowerCase().includes(searchQuery)));
             }
-
-            // 3. 輸出結果
             render(filteredData);
         }
 
-        // 複製功能
         window.copyText = function(text, el) {
             navigator.clipboard.writeText(text).then(() => {
                 const hintSpan = el.querySelector('.copy-hint');
                 if (hintSpan) {
                     hintSpan.innerText = '✅ 已複製';
                     hintSpan.classList.add('text-green-400');
-                    hintSpan.classList.remove('text-gray-600', 'group-hover:text-yellow-500');
                     el.classList.add('border-green-500/50');
-                    
                     setTimeout(() => {
                         hintSpan.innerText = '點擊複製';
                         hintSpan.classList.remove('text-green-400');
-                        hintSpan.classList.add('text-gray-600', 'group-hover:text-yellow-500');
                         el.classList.remove('border-green-500/50');
                     }, 1500);
                 }
-            }).catch(err => alert('複製失敗，請手動複製'));
+            });
         };
 
-        // 渲染畫面
         function render(data) {
             const list = document.getElementById('account-list');
             const emptyState = document.getElementById('empty-state');
             list.innerHTML = '';
 
-            if (data.length === 0) {
-                emptyState.classList.remove('hidden');
-                return;
-            } else {
-                emptyState.classList.add('hidden');
-            }
+            if (data.length === 0) return emptyState.classList.remove('hidden');
+            emptyState.classList.add('hidden');
 
             data.forEach(acc => {
                 const card = document.createElement('div');
                 card.className = 'acc-card p-6 md:p-8 rounded-2xl shadow-2xl relative overflow-hidden';
 
-                const configHtml = acc["內容配置"].map(item => {
+                const configArr = acc["內容配置"] || [];
+                const configHtml = configArr.map(item => {
                     const info = parseConfig(item);
                     const isMax = info.chain === '6';
                     const avatarUrl = getAvatarUrl(info.name);
-                    
                     return `
                         <div class="relative flex items-center bg-[#0d0d0f] rounded-xl p-3 border border-gray-700/50 group hover:border-yellow-500/50 hover:bg-[#1a1a20] transition overflow-hidden">
                             <img src="${avatarUrl}" class="absolute right-[-10px] top-[-10px] h-[130%] opacity-[0.15] char-bg pointer-events-none group-hover:opacity-30 transition-opacity duration-500 object-cover" />
-
                             <div class="relative z-10 flex-shrink-0 w-12 h-12 flex flex-col items-center justify-center rounded-lg ${isMax ? 'tag-6' : 'bg-gray-800 text-gray-300 border border-gray-700'}">
                                 <span class="text-[9px] leading-none uppercase tracking-wider mb-0.5">共鳴鏈</span>
                                 <span class="text-xl leading-none font-bold">${info.chain}</span>
                             </div>
-                            
                             <div class="relative z-10 flex items-center gap-3 ml-4">
                                 <div class="w-10 h-10 rounded-full border-2 ${isMax ? 'border-yellow-500' : 'border-gray-600'} overflow-hidden bg-gray-800 flex-shrink-0 shadow-lg">
-                                    <img src="${avatarUrl}" class="w-full h-full object-cover scale-110" alt="${info.name}" onerror="this.style.display='none'"/>
+                                    <img src="${avatarUrl}" class="w-full h-full object-cover scale-110" onerror="this.style.display='none'"/>
                                 </div>
                                 <div>
                                     <div class="text-white font-bold text-lg leading-tight group-hover:text-yellow-400 transition">${info.name}</div>
                                     <div class="text-xs text-blue-400 mt-0.5 font-medium">專武疊影: ${info.weapon} 階</div>
                                 </div>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                 }).join('');
 
                 card.innerHTML = `
@@ -246,7 +406,6 @@
                                     </span>
                                     <span class="group-open:rotate-180 transition-transform duration-300 text-xs">▼</span>
                                 </summary>
-                                
                                 <div class="p-4 pt-0 space-y-4 mt-2 border-t border-gray-800/50 mt-2 pt-4">
                                     <div>
                                         <label class="text-[10px] text-gray-500 font-bold mb-1 block tracking-widest">遊戲帳號</label>
@@ -265,7 +424,6 @@
                                 </div>
                             </details>
                         </div>
-
                         <div class="lg:w-2/3">
                              <label class="text-[12px] text-gray-500 tracking-widest font-bold mb-4 block flex items-center gap-2">
                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -281,6 +439,7 @@
             });
         }
 
+        // 啟動
         fetchData();
     </script>
 </body>
