@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>鳴潮內容管理終端</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0d0d0f; font-family: 'Inter', system-ui, sans-serif; }
+        .acc-card { background: linear-gradient(145deg, #16171a 0%, #1e2024 100%); border: 1px solid #2d2f36; }
+        .tag-6 { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #000; font-weight: 900; box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); }
+        
+        /* 隱藏預設的折疊三角形箭頭 */
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+
+        /* 頭像漸變遮罩特效 */
+        .char-bg { mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); }
+    </style>
+</head>
+<body class="text-gray-300 p-4 md:p-10">
+
+    <div class="max-w-5xl mx-auto">
+        <header class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-black text-white tracking-tighter">WUWA <span class="text-yellow-500">ARCHIVE</span></h1>
+                <p id="status" class="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+                    正在連線至雙數據庫...
+                </p>
+            </div>
+            <button onclick="fetchData()" class="text-xs border border-gray-700 bg-gray-800 px-4 py-2 rounded-lg hover:bg-white hover:text-black transition shadow-lg font-bold">↻ 強制同步數據</button>
+        </header>
+
+        <div class="flex flex-wrap gap-2 mb-8 border-b border-gray-800 pb-4">
+            <button onclick="applyFilter('all')" id="btn-all" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-white text-black transition shadow-md">全部顯示</button>
+            <button onclick="applyFilter('has6')" id="btn-has6" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">包含滿命 (6鏈)</button>
+            <button onclick="applyFilter('no6')" id="btn-no6" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">無滿命</button>
+        </div>
+
+        <div id="account-list" class="space-y-6">
+            </div>
+        
+        <div id="empty-state" class="hidden text-center py-20">
+            <p class="text-gray-500 text-lg">沒有符合條件的帳號</p>
+        </div>
+    </div>
+
+    <script>
+        const ACC_API_URL = 'https://raw.githubusercontent.com/snowyen0909/loon-2/refs/heads/main/Kl.json';
+        const IMG_API_URL = 'https://raw.githubusercontent.com/snowyen0909/loon-2/refs/heads/main/Klp.json';
+
+        let charImages = {};
+        let allAccountsData = [];
+
+        function getAvatarUrl(name) {
+            const key = Object.keys(charImages).find(k => name.includes(k) || k.includes(name));
+            return key ? charImages[key] : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        }
+
+        async function fetchData() {
+            const statusEl = document.getElementById('status');
+            statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> 正在同步數據...`;
+
+            try {
+                const timestamp = new Date().getTime();
+                const [accRes, imgRes] = await Promise.all([
+                    fetch(`${ACC_API_URL}?t=${timestamp}`),
+                    fetch(`${IMG_API_URL}?t=${timestamp}`)
+                ]);
+
+                if (!accRes.ok || !imgRes.ok) throw new Error("數據庫連線失敗");
+
+                const accData = await accRes.json();
+                charImages = await imgRes.json(); 
+
+                allAccountsData = Array.isArray(accData) ? accData : [accData];
+                applyFilter('all');
+                
+                statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500"></span> 數據與圖庫已同步`;
+            } catch (err) {
+                statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 連線失敗，請確認 JSON 格式`;
+                console.error(err);
+            }
+        }
+
+        function parseConfig(str) {
+            const match = str.match(/^(\d+)\+(\d+)(.+)$/);
+            if (match) {
+                return { chain: match[1], weapon: match[2], name: match[3] };
+            }
+            return { chain: '?', weapon: '?', name: str };
+        }
+
+        function applyFilter(type) {
+            const btns = ['all', 'has6', 'no6'];
+            btns.forEach(id => {
+                const btn = document.getElementById('btn-' + id);
+                if (id === type) {
+                    btn.className = "px-4 py-1.5 rounded-lg text-sm font-bold bg-white text-black transition shadow-md";
+                } else {
+                    btn.className = "px-4 py-1.5 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition";
+                }
+            });
+
+            let filteredData = [];
+            if (type === 'has6') {
+                filteredData = allAccountsData.filter(acc => acc["內容配置"].some(item => parseConfig(item).chain === '6'));
+            } else if (type === 'no6') {
+                filteredData = allAccountsData.filter(acc => !acc["內容配置"].some(item => parseConfig(item).chain === '6'));
+            } else {
+                filteredData = allAccountsData;
+            }
+            render(filteredData);
+        }
+
+        // 複製到剪貼簿功能
+        window.copyText = function(text, el) {
+            navigator.clipboard.writeText(text).then(() => {
+                const hintSpan = el.querySelector('.copy-hint');
+                if (hintSpan) {
+                    hintSpan.innerText = '✅ 已複製';
+                    hintSpan.classList.add('text-green-400');
+                    hintSpan.classList.remove('text-gray-600', 'group-hover:text-yellow-500');
+                    el.classList.add('border-green-500/50');
+                    
+                    setTimeout(() => {
+                        hintSpan.innerText = '點擊複製';
+                        hintSpan.classList.remove('text-green-400');
+                        hintSpan.classList.add('text-gray-600', 'group-hover:text-yellow-500');
+                        el.classList.remove('border-green-500/50');
+                    }, 1500);
+                }
+            }).catch(err => {
+                alert('複製失敗，請手動複製');
+            });
+        };
+
+        function render(data) {
+            const list = document.getElementById('account-list');
+            const emptyState = document.getElementById('empty-state');
+            list.innerHTML = '';
+
+            if (data.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            data.forEach(acc => {
+                const card = document.createElement('div');
+                card.className = 'acc-card p-6 md:p-8 rounded-2xl shadow-2xl relative overflow-hidden';
+
+                const configHtml = acc["內容配置"].map(item => {
+                    const info = parseConfig(item);
+                    const isMax = info.chain === '6';
+                    const avatarUrl = getAvatarUrl(info.name);
+                    
+                    return `
+                        <div class="relative flex items-center bg-[#0d0d0f] rounded-xl p-3 border border-gray-700/50 group hover:border-yellow-500/50 hover:bg-[#1a1a20] transition overflow-hidden">
+                            <img src="${avatarUrl}" class="absolute right-[-10px] top-[-10px] h-[130%] opacity-[0.15] char-bg pointer-events-none group-hover:opacity-30 transition-opacity duration-500 object-cover" />
+
+                            <div class="relative z-10 flex-shrink-0 w-12 h-12 flex flex-col items-center justify-center rounded-lg ${isMax ? 'tag-6' : 'bg-gray-800 text-gray-300 border border-gray-700'}">
+                                <span class="text-[9px] leading-none uppercase tracking-wider mb-0.5">共鳴鏈</span>
+                                <span class="text-xl leading-none font-bold">${info.chain}</span>
+                            </div>
+                            
+                            <div class="relative z-10 flex items-center gap-3 ml-4">
+                                <div class="w-10 h-10 rounded-full border-2 ${isMax ? 'border-yellow-500' : 'border-gray-600'} overflow-hidden bg-gray-800 flex-shrink-0 shadow-lg">
+                                    <img src="${avatarUrl}" class="w-full h-full object-cover scale-110" alt="${info.name}" onerror="this.style.display='none'"/>
+                                </div>
+                                <div>
+                                    <div class="text-white font-bold text-lg leading-tight group-hover:text-yellow-400 transition">${info.name}</div>
+                                    <div class="text-xs text-blue-400 mt-0.5 font-medium">專武疊影: ${info.weapon} 階</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                card.innerHTML = `
+                    <div class="flex flex-col lg:flex-row gap-8">
+                        <div class="lg:w-1/3 lg:border-r border-gray-800 lg:pr-8">
+                            <details class="group bg-black/40 rounded-xl border border-gray-700/50 open:bg-[#111216] open:border-gray-600 transition-all duration-300 shadow-inner">
+                                <summary class="p-4 text-sm font-bold text-gray-400 outline-none cursor-pointer hover:text-white flex justify-between items-center select-none">
+                                    <span class="flex items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-600" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                        </svg>
+                                        點擊顯示帳號密碼
+                                    </span>
+                                    <span class="group-open:rotate-180 transition-transform duration-300 text-xs">▼</span>
+                                </summary>
+                                
+                                <div class="p-4 pt-0 space-y-4 mt-2 border-t border-gray-800/50 mt-2 pt-4">
+                                    <div>
+                                        <label class="text-[10px] text-gray-500 font-bold mb-1 block tracking-widest">遊戲帳號</label>
+                                        <div onclick="copyText('${acc["帳號"]}@outlook.com', this)" class="group flex justify-between items-center cursor-pointer text-white font-mono bg-black px-3 py-2 rounded-lg border border-white/10 hover:border-white/30 transition">
+                                            <span class="truncate mr-2">${acc["帳號"]}@outlook.com</span>
+                                            <span class="copy-hint flex-shrink-0 text-[10px] font-bold text-gray-600 group-hover:text-yellow-500 transition">點擊複製</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] text-gray-500 font-bold mb-1 block tracking-widest">遊戲密碼</label>
+                                        <div onclick="copyText('${acc["密碼"]}', this)" class="group flex justify-between items-center cursor-pointer text-yellow-500 font-mono bg-black px-3 py-2 rounded-lg border border-white/10 hover:border-yellow-500/50 transition">
+                                            <span class="truncate mr-2">${acc["密碼"]}</span>
+                                            <span class="copy-hint flex-shrink-0 text-[10px] font-bold text-gray-600 group-hover:text-yellow-500 transition">點擊複製</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+
+                        <div class="lg:w-2/3">
+                             <label class="text-[12px] text-gray-500 tracking-widest font-bold mb-4 block flex items-center gap-2">
+                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                 角色與裝備配置
+                             </label>
+                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                ${configHtml}
+                             </div>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        fetchData();
+    </script>
+</body>
+</html>
