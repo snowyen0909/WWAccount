@@ -8,12 +8,8 @@
         body { background-color: #0d0d0f; font-family: 'Inter', system-ui, sans-serif; }
         .acc-card { background: linear-gradient(145deg, #16171a 0%, #1e2024 100%); border: 1px solid #2d2f36; }
         .tag-6 { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #000; font-weight: 900; box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); }
-        
-        /* 隱藏預設的折疊三角形箭頭 */
         details > summary { list-style: none; }
         details > summary::-webkit-details-marker { display: none; }
-
-        /* 頭像漸變遮罩特效 */
         .char-bg { mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); }
     </style>
 </head>
@@ -37,8 +33,9 @@
             <button onclick="applyFilter('no6')" id="btn-no6" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">無滿命</button>
         </div>
 
-        <div id="account-list" class="space-y-6">
-            </div>
+        <div id="error-box" class="hidden mb-6 p-4 bg-red-900/30 border border-red-500/50 rounded-xl text-red-400 font-mono text-sm break-all"></div>
+
+        <div id="account-list" class="space-y-6"></div>
         
         <div id="empty-state" class="hidden text-center py-20">
             <p class="text-gray-500 text-lg">沒有符合條件的帳號</p>
@@ -59,26 +56,47 @@
 
         async function fetchData() {
             const statusEl = document.getElementById('status');
+            const errorBox = document.getElementById('error-box');
+            
             statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> 正在同步數據...`;
+            errorBox.classList.add('hidden');
+            errorBox.innerText = '';
 
             try {
                 const timestamp = new Date().getTime();
+                
                 const [accRes, imgRes] = await Promise.all([
                     fetch(`${ACC_API_URL}?t=${timestamp}`),
                     fetch(`${IMG_API_URL}?t=${timestamp}`)
                 ]);
 
-                if (!accRes.ok || !imgRes.ok) throw new Error("數據庫連線失敗");
+                if (!accRes.ok) throw new Error(`無法讀取帳號資料 (HTTP ${accRes.status})，請確認檔案是否存在`);
+                if (!imgRes.ok) throw new Error(`無法讀取圖片資料 (HTTP ${imgRes.status})，請確認檔案是否存在`);
 
-                const accData = await accRes.json();
-                charImages = await imgRes.json(); 
+                // 拆分 JSON 解析過程，以便精確抓出是哪個檔案寫錯了
+                let accData, imgData;
+                try {
+                    accData = await accRes.json();
+                } catch (e) {
+                    throw new Error(`【帳號檔案 Kl.json 解析失敗】\n請檢查是否有缺少引號或多餘逗號。\n詳細錯誤: ${e.message}`);
+                }
 
+                try {
+                    imgData = await imgRes.json();
+                } catch (e) {
+                    throw new Error(`【圖片檔案 Klp.json 解析失敗】\n請檢查是否有缺少引號或多餘逗號。\n詳細錯誤: ${e.message}`);
+                }
+
+                charImages = imgData; 
                 allAccountsData = Array.isArray(accData) ? accData : [accData];
-                applyFilter('all');
                 
+                applyFilter('all');
                 statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500"></span> 數據與圖庫已同步`;
+                
             } catch (err) {
-                statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 連線失敗，請確認 JSON 格式`;
+                statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 連線失敗`;
+                errorBox.classList.remove('hidden');
+                errorBox.innerText = err.message;
                 console.error(err);
             }
         }
@@ -113,7 +131,6 @@
             render(filteredData);
         }
 
-        // 複製到剪貼簿功能
         window.copyText = function(text, el) {
             navigator.clipboard.writeText(text).then(() => {
                 const hintSpan = el.querySelector('.copy-hint');
@@ -130,9 +147,7 @@
                         el.classList.remove('border-green-500/50');
                     }, 1500);
                 }
-            }).catch(err => {
-                alert('複製失敗，請手動複製');
-            });
+            }).catch(err => alert('複製失敗，請手動複製'));
         };
 
         function render(data) {
