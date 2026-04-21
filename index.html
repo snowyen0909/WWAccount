@@ -27,18 +27,35 @@
             <button onclick="fetchData()" class="text-xs border border-gray-700 bg-gray-800 px-4 py-2 rounded-lg hover:bg-white hover:text-black transition shadow-lg font-bold">↻ 強制同步數據</button>
         </header>
 
-        <div class="flex flex-wrap gap-2 mb-8 border-b border-gray-800 pb-4">
-            <button onclick="applyFilter('all')" id="btn-all" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-white text-black transition shadow-md">全部顯示</button>
-            <button onclick="applyFilter('has6')" id="btn-has6" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">包含滿命 (6鏈)</button>
-            <button onclick="applyFilter('no6')" id="btn-no6" class="px-4 py-1.5 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">無滿命</button>
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 border-b border-gray-800 pb-5">
+            <div class="flex flex-wrap gap-2">
+                <button onclick="applyFilter('all')" id="btn-all" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-black transition shadow-md">全部顯示</button>
+                <button onclick="applyFilter('has6')" id="btn-has6" class="px-4 py-2 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">包含滿命 (6鏈)</button>
+                <button onclick="applyFilter('no6')" id="btn-no6" class="px-4 py-2 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">無滿命</button>
+            </div>
+            
+            <div class="w-full md:w-72 relative group">
+                <input 
+                    type="text" 
+                    id="search-input" 
+                    onkeyup="handleSearch()" 
+                    placeholder="搜尋角色名稱 (例如: 西格莉卡)" 
+                    class="w-full bg-gray-900 border border-gray-700 text-white text-sm px-4 py-2 rounded-lg focus:outline-none focus:border-yellow-500 transition placeholder-gray-600"
+                >
+                <svg xmlns="http://www.w3.org/2000/svg" class="absolute right-3 top-2.5 h-5 w-5 text-gray-500 group-focus-within:text-yellow-500 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </div>
         </div>
 
         <div id="error-box" class="hidden mb-6 p-4 bg-red-900/30 border border-red-500/50 rounded-xl text-red-400 font-mono text-sm break-all"></div>
 
         <div id="account-list" class="space-y-6"></div>
         
-        <div id="empty-state" class="hidden text-center py-20">
-            <p class="text-gray-500 text-lg">沒有符合條件的帳號</p>
+        <div id="empty-state" class="hidden text-center py-20 bg-gray-900/30 border border-gray-800 rounded-2xl border-dashed">
+            <div class="text-4xl mb-3 opacity-50">🔍</div>
+            <p class="text-gray-400 text-lg font-bold">找不到符合條件的帳號</p>
+            <p class="text-gray-600 text-sm mt-1">請嘗試清除搜尋條件或切換篩選器</p>
         </div>
     </div>
 
@@ -48,6 +65,10 @@
 
         let charImages = {};
         let allAccountsData = [];
+        
+        // 狀態管理：同時記錄「按鈕狀態」與「搜尋文字」
+        let currentFilter = 'all';
+        let searchQuery = '';
 
         function getAvatarUrl(name) {
             const key = Object.keys(charImages).find(k => name.includes(k) || k.includes(name));
@@ -64,40 +85,29 @@
 
             try {
                 const timestamp = new Date().getTime();
-                
                 const [accRes, imgRes] = await Promise.all([
                     fetch(`${ACC_API_URL}?t=${timestamp}`),
                     fetch(`${IMG_API_URL}?t=${timestamp}`)
                 ]);
 
-                if (!accRes.ok) throw new Error(`無法讀取帳號資料 (HTTP ${accRes.status})，請確認檔案是否存在`);
-                if (!imgRes.ok) throw new Error(`無法讀取圖片資料 (HTTP ${imgRes.status})，請確認檔案是否存在`);
+                if (!accRes.ok) throw new Error(`無法讀取帳號資料 (HTTP ${accRes.status})`);
+                if (!imgRes.ok) throw new Error(`無法讀取圖片資料 (HTTP ${imgRes.status})`);
 
-                // 拆分 JSON 解析過程，以便精確抓出是哪個檔案寫錯了
                 let accData, imgData;
-                try {
-                    accData = await accRes.json();
-                } catch (e) {
-                    throw new Error(`【帳號檔案 Kl.json 解析失敗】\n請檢查是否有缺少引號或多餘逗號。\n詳細錯誤: ${e.message}`);
-                }
-
-                try {
-                    imgData = await imgRes.json();
-                } catch (e) {
-                    throw new Error(`【圖片檔案 Klp.json 解析失敗】\n請檢查是否有缺少引號或多餘逗號。\n詳細錯誤: ${e.message}`);
-                }
+                try { accData = await accRes.json(); } catch (e) { throw new Error(`【帳號檔案 Kl.json 解析失敗】\n${e.message}`); }
+                try { imgData = await imgRes.json(); } catch (e) { throw new Error(`【圖片檔案 Klp.json 解析失敗】\n${e.message}`); }
 
                 charImages = imgData; 
                 allAccountsData = Array.isArray(accData) ? accData : [accData];
                 
-                applyFilter('all');
+                // 初始渲染
+                updateView();
                 statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500"></span> 數據與圖庫已同步`;
                 
             } catch (err) {
                 statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 連線失敗`;
                 errorBox.classList.remove('hidden');
                 errorBox.innerText = err.message;
-                console.error(err);
             }
         }
 
@@ -109,28 +119,57 @@
             return { chain: '?', weapon: '?', name: str };
         }
 
+        // 點擊篩選按鈕
         function applyFilter(type) {
+            currentFilter = type;
+            
+            // 更新按鈕樣式
             const btns = ['all', 'has6', 'no6'];
             btns.forEach(id => {
                 const btn = document.getElementById('btn-' + id);
                 if (id === type) {
-                    btn.className = "px-4 py-1.5 rounded-lg text-sm font-bold bg-white text-black transition shadow-md";
+                    btn.className = "px-4 py-2 rounded-lg text-sm font-bold bg-white text-black transition shadow-md";
                 } else {
-                    btn.className = "px-4 py-1.5 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition";
+                    btn.className = "px-4 py-2 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition";
                 }
             });
 
-            let filteredData = [];
-            if (type === 'has6') {
-                filteredData = allAccountsData.filter(acc => acc["內容配置"].some(item => parseConfig(item).chain === '6'));
-            } else if (type === 'no6') {
-                filteredData = allAccountsData.filter(acc => !acc["內容配置"].some(item => parseConfig(item).chain === '6'));
-            } else {
-                filteredData = allAccountsData;
+            updateView(); // 觸發統一更新
+        }
+
+        // 在搜尋框輸入文字
+        function handleSearch() {
+            searchQuery = document.getElementById('search-input').value.trim().toLowerCase();
+            updateView(); // 觸發統一更新
+        }
+
+        // 核心邏輯：結合「按鈕篩選」與「文字搜尋」
+        function updateView() {
+            let filteredData = allAccountsData;
+
+            // 1. 先過濾按鈕條件 (滿命/無滿命)
+            if (currentFilter === 'has6') {
+                filteredData = filteredData.filter(acc => acc["內容配置"].some(item => parseConfig(item).chain === '6'));
+            } else if (currentFilter === 'no6') {
+                filteredData = filteredData.filter(acc => !acc["內容配置"].some(item => parseConfig(item).chain === '6'));
             }
+
+            // 2. 再過濾搜尋文字 (若有輸入)
+            if (searchQuery !== '') {
+                filteredData = filteredData.filter(acc => {
+                    // 檢查該帳號的「內容配置」中，是否有角色的名稱包含搜尋字串
+                    return acc["內容配置"].some(item => {
+                        const info = parseConfig(item);
+                        return info.name.toLowerCase().includes(searchQuery);
+                    });
+                });
+            }
+
+            // 3. 輸出結果
             render(filteredData);
         }
 
+        // 複製功能
         window.copyText = function(text, el) {
             navigator.clipboard.writeText(text).then(() => {
                 const hintSpan = el.querySelector('.copy-hint');
@@ -150,6 +189,7 @@
             }).catch(err => alert('複製失敗，請手動複製'));
         };
 
+        // 渲染畫面
         function render(data) {
             const list = document.getElementById('account-list');
             const emptyState = document.getElementById('empty-state');
