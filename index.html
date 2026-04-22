@@ -3,443 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>鳴潮帳號管理終端</title>
+    <title>WUWA ARCHIVE</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #0d0d0f; font-family: 'Inter', system-ui, sans-serif; }
-        .acc-card { background: linear-gradient(145deg, #16171a 0%, #1e2024 100%); border: 1px solid #2d2f36; }
-        .tag-6 { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #000; font-weight: 900; box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); }
+        body { background-color: #0d0d0f; font-family: 'Inter', sans-serif; }
+        .acc-card { background-color: #1a1b1e; border-radius: 24px; border: 1px solid #262626; margin-bottom: 24px; }
+        .summary-box { background-color: #0d0d0f; border: 1px solid #2d2f36; border-radius: 16px; transition: all 0.2s; }
+        .char-row { background-color: #0d0d0f; border-radius: 16px; margin-bottom: 12px; position: relative; overflow: hidden; border: 1px solid #1a1b1e; }
+        .chain-box { width: 68px; height: 68px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; }
+        .tag-6 { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #000; font-weight: 900; box-shadow: 0 0 15px rgba(245, 158, 11, 0.3); }
+        .tag-other { background-color: #1e2024; color: #9ca3af; border: 1px solid #2d2f36; }
+        .char-bg-watermark { position: absolute; right: 0; top: 0; height: 100%; opacity: 0.15; mask-image: linear-gradient(to left, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); }
         details > summary { list-style: none; }
-        details > summary::-webkit-details-marker { display: none; }
-        .char-bg { mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); }
-        .modal-bg { background-color: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); }
-        
-        /* 自訂滾動條給刪除列表使用 */
-        .custom-scroll::-webkit-scrollbar { width: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: #16171a; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
     </style>
 </head>
-<body class="text-gray-300 p-4 md:p-10 relative">
+<body class="text-gray-300 p-6 md:p-10">
 
-    <div class="max-w-5xl mx-auto">
-        <header class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-                <h1 class="text-3xl font-black text-white tracking-tighter">WUWA <span class="text-yellow-500">ARCHIVE</span></h1>
-                <p id="status" class="text-xs text-gray-500 mt-1 flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
-                    正在連線至雙數據庫...
-                </p>
-            </div>
-            <div class="flex gap-3">
-                <button onclick="openManageModal()" class="flex items-center gap-1 text-sm bg-gray-800 border border-gray-600 px-4 py-2 rounded-lg text-white hover:bg-gray-700 hover:border-yellow-500 transition shadow-lg font-bold">
-                    ⚙️ 系統管理
-                </button>
-                <button onclick="fetchData()" class="text-xs border border-gray-700 bg-gray-800 px-4 py-2 rounded-lg hover:bg-white hover:text-black transition shadow-lg font-bold">↻ 強制同步</button>
-            </div>
+    <div class="max-w-2xl mx-auto">
+        <header class="mb-10 text-center md:text-left">
+            <h1 class="text-4xl font-black text-white italic tracking-tighter">WUWA <span class="text-yellow-500">ARCHIVE</span></h1>
+            <p class="text-[10px] text-gray-600 mt-2 tracking-[0.3em] uppercase flex items-center justify-center md:justify-start gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> 數據已同步
+            </p>
         </header>
 
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 border-b border-gray-800 pb-5">
-            <div class="flex flex-wrap gap-2">
-                <button onclick="applyFilter('all')" id="btn-all" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-black transition shadow-md">全部顯示</button>
-                <button onclick="applyFilter('has6')" id="btn-has6" class="px-4 py-2 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">包含滿命 (6鏈)</button>
-                <button onclick="applyFilter('no6')" id="btn-no6" class="px-4 py-2 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition">無滿命</button>
-            </div>
-            <div class="w-full md:w-72 relative group">
-                <input type="text" id="search-input" onkeyup="handleSearch()" placeholder="搜尋角色名稱 (例如: 西格莉卡)" class="w-full bg-gray-900 border border-gray-700 text-white text-sm px-4 py-2 rounded-lg focus:outline-none focus:border-yellow-500 transition placeholder-gray-600">
-                <svg xmlns="http://www.w3.org/2000/svg" class="absolute right-3 top-2.5 h-5 w-5 text-gray-500 group-focus-within:text-yellow-500 transition pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-            </div>
+        <div class="flex flex-wrap gap-2 mb-4">
+            <button onclick="applyFilter('all')" id="btn-all" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-black transition shadow-lg">全部顯示</button>
+            <button onclick="applyFilter('has6')" id="btn-has6" class="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 bg-[#1e2024] border border-gray-800 hover:text-white transition">包含滿命 (6鏈)</button>
+            <button onclick="applyFilter('no6')" id="btn-no6" class="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 bg-[#1e2024] border border-gray-800 hover:text-white transition">無滿命</button>
         </div>
 
-        <div id="error-box" class="hidden mb-6 p-4 bg-red-900/30 border border-red-500/50 rounded-xl text-red-400 font-mono text-sm break-all"></div>
+        <div class="relative group mb-10">
+            <input type="text" id="search-input" onkeyup="handleSearch()" placeholder="搜尋角色名稱 (例如: 西格莉卡)" class="w-full bg-[#16171a] border border-gray-800 text-white text-sm px-5 py-3.5 rounded-2xl focus:outline-none focus:border-gray-600 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="absolute right-4 top-4 h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        </div>
 
         <div id="account-list" class="space-y-6"></div>
-        
-        <div id="empty-state" class="hidden text-center py-20 bg-gray-900/30 border border-gray-800 rounded-2xl border-dashed">
-            <div class="text-4xl mb-3 opacity-50">🗃️</div>
-            <p class="text-gray-400 text-lg font-bold">目前沒有符合條件的帳號</p>
-            <p class="text-gray-600 text-sm mt-1">點擊上方「⚙️ 系統管理」來新增資料吧！</p>
-        </div>
-    </div>
-
-    <div id="manage-modal" class="hidden fixed inset-0 z-50 modal-bg flex items-center justify-center p-4">
-        <div class="bg-[#16171a] border border-gray-700 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            
-            <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-[#0d0d0f]">
-                <h2 class="text-xl font-bold text-white flex items-center gap-2">⚙️ 系統管理控制台</h2>
-                <button onclick="closeManageModal()" class="text-gray-500 hover:text-white text-2xl leading-none">&times;</button>
-            </div>
-
-            <div class="flex border-b border-gray-800 bg-[#1a1c23]">
-                <button onclick="switchTab('tab-single')" id="btn-tab-single" class="flex-1 py-3 text-sm font-bold text-yellow-500 border-b-2 border-yellow-500 transition">單筆新增</button>
-                <button onclick="switchTab('tab-bulk')" id="btn-tab-bulk" class="flex-1 py-3 text-sm font-bold text-gray-500 hover:text-gray-300 border-b-2 border-transparent transition">批量 JSON 匯入</button>
-                <button onclick="switchTab('tab-delete')" id="btn-tab-delete" class="flex-1 py-3 text-sm font-bold text-gray-500 hover:text-red-400 border-b-2 border-transparent transition">刪除帳號</button>
-            </div>
-
-            <div class="p-6 overflow-y-auto custom-scroll flex-1">
-                
-                <div id="tab-single" class="space-y-4 block">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-400 mb-1">遊戲帳號 (不含後綴)</label>
-                        <input type="text" id="new-acc" placeholder="例如: unpwebt218" class="w-full bg-black border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-yellow-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-400 mb-1">遊戲密碼</label>
-                        <input type="text" id="new-pwd" placeholder="例如: jltw05y1j" class="w-full bg-black border border-gray-700 rounded-lg px-3 py-2 text-yellow-500 font-mono focus:border-yellow-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-400 mb-1">角色配置 (以逗號分隔)</label>
-                        <textarea id="new-config" placeholder="例如: 6+1西格莉卡, 0+0仇遠" class="w-full h-24 bg-black border border-gray-700 rounded-lg px-3 py-2 text-blue-400 font-mono focus:border-yellow-500 outline-none resize-none"></textarea>
-                    </div>
-                    <button onclick="saveSingleAccount()" class="w-full py-2.5 mt-2 rounded-lg text-sm font-bold bg-yellow-600 text-black hover:bg-yellow-500 transition shadow-lg">儲存並上傳</button>
-                </div>
-
-                <div id="tab-bulk" class="space-y-4 hidden">
-                    <div class="bg-blue-900/20 border border-blue-800/50 p-3 rounded-lg text-xs text-blue-300">
-                        請貼上標準的 JSON 陣列格式。新匯入的帳號會被添加到現有資料的<b>最前面</b>。
-                    </div>
-                    <div>
-                        <textarea id="bulk-json" placeholder='[\n  {\n    "帳號": "abc001",\n    "密碼": "pass123",\n    "內容配置": ["0+0長離"]\n  }\n]' class="w-full h-48 bg-black border border-gray-700 rounded-lg px-3 py-2 text-green-400 font-mono focus:border-yellow-500 outline-none resize-none text-xs"></textarea>
-                    </div>
-                    <button onclick="saveBulkAccounts()" class="w-full py-2.5 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-500 transition shadow-lg">驗證並批量寫入</button>
-                </div>
-
-                <div id="tab-delete" class="hidden">
-                    <div class="bg-red-900/20 border border-red-800/50 p-3 rounded-lg text-xs text-red-300 mb-4">
-                        ⚠️ 警告：點擊刪除後將直接從資料庫移除，請小心操作。
-                    </div>
-                    <div id="delete-list-container" class="space-y-2">
-                        </div>
-                </div>
-
-            </div>
-        </div>
+        <div id="empty-state" class="hidden text-center py-20 text-gray-600 italic tracking-widest">NO RECORDS FOUND</div>
     </div>
 
     <script>
-        // ⚠️ 替換成你的 Cloudflare Worker 網址
-        const ACC_API_URL = 'https://wuwa-api.andy96990808.workers.dev'; 
-        const IMG_API_URL = 'https://raw.githubusercontent.com/snowyen0909/loon-2/refs/heads/main/Klp.json';
-
-        let charImages = {};
-        let allAccountsData = [];
-        let currentFilter = 'all';
-        let searchQuery = '';
-
-        function getAvatarUrl(name) {
-            const key = Object.keys(charImages).find(k => name.includes(k) || k.includes(name));
-            return key ? charImages[key] : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-        }
+        const API_BASE = 'https://wuwa-api.andy96990808.workers.dev'; 
+        let charImages = {}, allAccountsData = [], currentFilter = 'all', searchQuery = '';
 
         async function fetchData() {
-            const statusEl = document.getElementById('status');
-            const errorBox = document.getElementById('error-box');
-            
-            statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span> 正在同步數據...`;
-            errorBox.classList.add('hidden');
-            errorBox.innerText = '';
-
             try {
-                const timestamp = new Date().getTime();
                 const [accRes, imgRes] = await Promise.all([
-                    fetch(`${ACC_API_URL}?t=${timestamp}`),
-                    fetch(`${IMG_API_URL}?t=${timestamp}`)
+                    fetch(`${API_BASE}?type=accounts&t=${Date.now()}`),
+                    fetch(`${API_BASE}?type=images&t=${Date.now()}`)
                 ]);
-
-                if (!accRes.ok) throw new Error(`無法讀取帳號資料 (HTTP ${accRes.status})`);
-                if (!imgRes.ok) throw new Error(`無法讀取圖片資料 (HTTP ${imgRes.status})`);
-
-                let accData, imgData;
-                try { accData = await accRes.json(); } catch (e) { throw new Error(`帳號檔案解析失敗\n${e.message}`); }
-                try { imgData = await imgRes.json(); } catch (e) { throw new Error(`圖片檔案解析失敗\n${e.message}`); }
-
-                charImages = imgData; 
-                allAccountsData = Array.isArray(accData) ? accData : [accData];
-                
+                allAccountsData = await accRes.json();
+                charImages = await imgRes.json();
                 updateView();
-                statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500"></span> 數據已同步`;
-            } catch (err) {
-                statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 連線失敗`;
-                errorBox.classList.remove('hidden');
-                errorBox.innerText = err.message;
-            }
+            } catch (e) { console.error(e); }
         }
 
-        // 共用安全上傳核心函數 (統一處理密碼與 Fetch POST)
-        async function syncDataToServer(newDataArray, successMessage) {
-            const adminPass = prompt("🛡️ 寫入雲端資料庫需要權限。\n請輸入管理員密碼：");
-            if (adminPass === null || adminPass.trim() === '') return; 
-
-            document.getElementById('status').innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> 正在更新雲端...`;
-
-            try {
-                const res = await fetch(ACC_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Admin-Password': adminPass
-                    },
-                    body: JSON.stringify(newDataArray)
-                });
-
-                if (res.status === 401) {
-                    alert("❌ 密碼錯誤，權限被拒絕！");
-                    document.getElementById('status').innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 驗證失敗`;
-                    return;
-                }
-                if (!res.ok) throw new Error("伺服器錯誤");
-
-                alert(`✅ ${successMessage}`);
-                closeManageModal();
-                fetchData(); // 重新抓取並刷新畫面
-
-            } catch (err) {
-                alert("❌ 更新失敗：" + err.message);
-                document.getElementById('status').innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> 更新失敗`;
-            }
+        function parseCfg(s) {
+            const m = s.match(/^(\d+)\+(\d+)(.+)$/);
+            return m ? { c: m[1], w: m[2], n: m[3] } : { c: '?', w: '?', n: s };
         }
 
-        /* --- ⚙️ 控制台 UI 邏輯 --- */
-        function openManageModal() { 
-            document.getElementById('manage-modal').classList.remove('hidden'); 
-            switchTab('tab-single'); // 預設打開單筆新增
-        }
-        function closeManageModal() { 
-            document.getElementById('manage-modal').classList.add('hidden'); 
-        }
-
-        function switchTab(tabId) {
-            // 隱藏所有內容
-            ['tab-single', 'tab-bulk', 'tab-delete'].forEach(id => {
-                document.getElementById(id).classList.add('hidden');
-                document.getElementById('btn-' + id).className = "flex-1 py-3 text-sm font-bold text-gray-500 hover:text-gray-300 border-b-2 border-transparent transition";
-            });
-            // 顯示目標內容與按鈕高亮
-            document.getElementById(tabId).classList.remove('hidden');
-            document.getElementById(tabId).classList.add('block');
-            
-            const activeBtn = document.getElementById('btn-' + tabId);
-            if(tabId === 'tab-single') activeBtn.className = "flex-1 py-3 text-sm font-bold text-yellow-500 border-b-2 border-yellow-500 transition";
-            if(tabId === 'tab-bulk') activeBtn.className = "flex-1 py-3 text-sm font-bold text-blue-400 border-b-2 border-blue-400 transition";
-            if(tabId === 'tab-delete') activeBtn.className = "flex-1 py-3 text-sm font-bold text-red-500 border-b-2 border-red-500 transition";
-
-            // 如果是刪除分頁，動態渲染列表
-            if(tabId === 'tab-delete') renderDeleteList();
-        }
-
-        /* --- 功能 1：單筆新增 --- */
-        function saveSingleAccount() {
-            const acc = document.getElementById('new-acc').value.trim();
-            const pwd = document.getElementById('new-pwd').value.trim();
-            const configRaw = document.getElementById('new-config').value.trim();
-
-            if(!acc || !pwd || !configRaw) return alert("⚠️ 請填寫完整資訊！");
-
-            const configArray = configRaw.split(',').map(item => item.trim()).filter(item => item !== "");
-            const newAccountObj = { "帳號": acc, "密碼": pwd, "內容配置": configArray };
-            
-            // 加入到陣列最前面
-            const updatedData = [newAccountObj, ...allAccountsData];
-            syncDataToServer(updatedData, "單筆帳號已成功寫入雲端！");
-            
-            // 清空輸入框
-            document.getElementById('new-acc').value = '';
-            document.getElementById('new-pwd').value = '';
-            document.getElementById('new-config').value = '';
-        }
-
-        /* --- 功能 2：批量匯入 --- */
-        function saveBulkAccounts() {
-            const rawJson = document.getElementById('bulk-json').value.trim();
-            if(!rawJson) return alert("⚠️ 請輸入 JSON 數據！");
-
-            try {
-                let parsedData = JSON.parse(rawJson);
-                // 容錯處理：如果只貼了一個物件，自動轉成陣列
-                if (!Array.isArray(parsedData)) parsedData = [parsedData];
-                
-                // 簡單檢查格式
-                if (!parsedData[0]["帳號"] || !parsedData[0]["內容配置"]) {
-                    throw new Error("JSON 格式缺少必要的 '帳號' 或 '內容配置' 欄位");
-                }
-
-                // 將新陣列加到舊陣列前面
-                const updatedData = [...parsedData, ...allAccountsData];
-                syncDataToServer(updatedData, `成功批量匯入 ${parsedData.length} 筆帳號！`);
-                document.getElementById('bulk-json').value = '';
-
-            } catch (e) {
-                alert("❌ JSON 解析失敗，請檢查格式：\n" + e.message);
-            }
-        }
-
-        /* --- 功能 3：刪除帳號 --- */
-        function renderDeleteList() {
-            const container = document.getElementById('delete-list-container');
-            if (allAccountsData.length === 0) {
-                container.innerHTML = `<p class="text-center text-gray-500 py-4">目前沒有任何帳號可刪除</p>`;
-                return;
-            }
-
-            container.innerHTML = allAccountsData.map((acc, index) => `
-                <div class="flex justify-between items-center bg-black/50 border border-gray-800 p-3 rounded-lg">
-                    <div>
-                        <p class="text-sm text-white font-bold">${acc["帳號"]}@outlook.com</p>
-                        <p class="text-[10px] text-gray-500 mt-1 truncate w-48">${acc["內容配置"].join(' / ')}</p>
-                    </div>
-                    <button onclick="confirmDelete(${index})" class="bg-red-900/50 hover:bg-red-600 text-red-300 hover:text-white border border-red-800 px-3 py-1 rounded text-xs font-bold transition">
-                        🗑️ 刪除
-                    </button>
-                </div>
-            `).join('');
-        }
-
-        function confirmDelete(index) {
-            const accName = allAccountsData[index]["帳號"];
-            if (confirm(`⚠️ 確定要永久刪除 [ ${accName} ] 嗎？\n此操作無法復原！`)) {
-                // 複製一份舊陣列並移除該索引的資料
-                const updatedData = [...allAccountsData];
-                updatedData.splice(index, 1);
-                
-                syncDataToServer(updatedData, `帳號 [ ${accName} ] 已成功刪除！`);
-            }
-        }
-
-        /* --- 渲染與篩選 --- */
-        function parseConfig(str) {
-            const match = str.trim().match(/^(\d+)\+(\d+)(.+)$/);
-            if (match) return { chain: match[1], weapon: match[2], name: match[3].trim() };
-            return { chain: '?', weapon: '?', name: str.trim() };
-        }
-
-        function applyFilter(type) {
-            currentFilter = type;
-            const btns = ['all', 'has6', 'no6'];
-            btns.forEach(id => {
-                const btn = document.getElementById('btn-' + id);
-                btn.className = id === type 
-                    ? "px-4 py-2 rounded-lg text-sm font-bold bg-white text-black transition shadow-md"
-                    : "px-4 py-2 rounded-lg text-sm font-bold bg-gray-900 border border-gray-700 text-gray-400 hover:text-white transition";
+        function applyFilter(t) {
+            currentFilter = t;
+            ['all','has6','no6'].forEach(id => {
+                document.getElementById('btn-'+id).className = id===t 
+                    ? "px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-black transition shadow-lg" 
+                    : "px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 bg-[#1e2024] border border-gray-800 hover:text-white transition";
             });
             updateView();
         }
 
-        function handleSearch() {
-            searchQuery = document.getElementById('search-input').value.trim().toLowerCase();
-            updateView();
-        }
+        function handleSearch() { searchQuery = document.getElementById('search-input').value.trim().toLowerCase(); updateView(); }
 
         function updateView() {
-            let filteredData = allAccountsData;
-            if (currentFilter === 'has6') filteredData = filteredData.filter(acc => acc["內容配置"] && acc["內容配置"].some(item => parseConfig(item).chain === '6'));
-            if (currentFilter === 'no6') filteredData = filteredData.filter(acc => acc["內容配置"] && !acc["內容配置"].some(item => parseConfig(item).chain === '6'));
-            if (searchQuery !== '') {
-                filteredData = filteredData.filter(acc => acc["內容配置"] && acc["內容配置"].some(item => parseConfig(item).name.toLowerCase().includes(searchQuery)));
-            }
-            render(filteredData);
-        }
-
-        window.copyText = function(text, el) {
-            navigator.clipboard.writeText(text).then(() => {
-                const hintSpan = el.querySelector('.copy-hint');
-                if (hintSpan) {
-                    hintSpan.innerText = '✅ 已複製';
-                    hintSpan.classList.add('text-green-400');
-                    el.classList.add('border-green-500/50');
-                    setTimeout(() => {
-                        hintSpan.innerText = '點擊複製';
-                        hintSpan.classList.remove('text-green-400');
-                        el.classList.remove('border-green-500/50');
-                    }, 1500);
-                }
-            });
-        };
-
-        function render(data) {
+            let data = allAccountsData;
+            
+            // 加入三個按鈕的過濾邏輯
+            if(currentFilter==='has6') data = data.filter(a => a["內容配置"].some(c => parseCfg(c).c === '6'));
+            if(currentFilter==='no6') data = data.filter(a => !a["內容配置"].some(c => parseCfg(c).c === '6'));
+            
+            if(searchQuery) data = data.filter(a => a["內容配置"].some(c => parseCfg(c).n.toLowerCase().includes(searchQuery)));
+            
             const list = document.getElementById('account-list');
-            const emptyState = document.getElementById('empty-state');
-            list.innerHTML = '';
+            if(data.length === 0) { document.getElementById('empty-state').classList.remove('hidden'); list.innerHTML = ''; return; }
+            document.getElementById('empty-state').classList.add('hidden');
 
-            if (data.length === 0) return emptyState.classList.remove('hidden');
-            emptyState.classList.add('hidden');
-
-            data.forEach(acc => {
-                const card = document.createElement('div');
-                card.className = 'acc-card p-6 md:p-8 rounded-2xl shadow-2xl relative overflow-hidden';
-
-                const configArr = acc["內容配置"] || [];
-                const configHtml = configArr.map(item => {
-                    const info = parseConfig(item);
-                    const isMax = info.chain === '6';
-                    const avatarUrl = getAvatarUrl(info.name);
+            list.innerHTML = data.map(acc => {
+                const cfgs = acc["內容配置"].map(c => {
+                    const info = parseCfg(c);
+                    const url = charImages[info.n] || '';
                     return `
-                        <div class="relative flex items-center bg-[#0d0d0f] rounded-xl p-3 border border-gray-700/50 group hover:border-yellow-500/50 hover:bg-[#1a1a20] transition overflow-hidden">
-                            <img src="${avatarUrl}" class="absolute right-[-10px] top-[-10px] h-[130%] opacity-[0.15] char-bg pointer-events-none group-hover:opacity-30 transition-opacity duration-500 object-cover" />
-                            <div class="relative z-10 flex-shrink-0 w-12 h-12 flex flex-col items-center justify-center rounded-lg ${isMax ? 'tag-6' : 'bg-gray-800 text-gray-300 border border-gray-700'}">
-                                <span class="text-[9px] leading-none uppercase tracking-wider mb-0.5">共鳴鏈</span>
-                                <span class="text-xl leading-none font-bold">${info.chain}</span>
+                    <div class="char-row p-4 flex items-center gap-5">
+                        <img src="${url}" class="char-bg-watermark">
+                        <div class="chain-box ${info.c==='6'?'tag-6':'tag-other'}">
+                            <span class="text-[8px] uppercase font-bold leading-none mb-1">共鳴鏈</span>
+                            <span class="text-2xl font-black leading-none">${info.c}</span>
+                        </div>
+                        <div class="flex items-center gap-4 z-10">
+                            <div class="w-12 h-12 rounded-full border-2 border-yellow-500/50 overflow-hidden bg-gray-900 shadow-xl">
+                                <img src="${url}" class="w-full h-full object-cover scale-110" onerror="this.style.opacity='0'">
                             </div>
-                            <div class="relative z-10 flex items-center gap-3 ml-4">
-                                <div class="w-10 h-10 rounded-full border-2 ${isMax ? 'border-yellow-500' : 'border-gray-600'} overflow-hidden bg-gray-800 flex-shrink-0 shadow-lg">
-                                    <img src="${avatarUrl}" class="w-full h-full object-cover scale-110" onerror="this.style.display='none'"/>
-                                </div>
-                                <div>
-                                    <div class="text-white font-bold text-lg leading-tight group-hover:text-yellow-400 transition">${info.name}</div>
-                                    <div class="text-xs text-blue-400 mt-0.5 font-medium">專武疊影: ${info.weapon} 階</div>
-                                </div>
+                            <div>
+                                <h4 class="text-white font-bold text-lg leading-tight tracking-wide">${info.n}</h4>
+                                <p class="text-[11px] text-blue-400 font-medium mt-1">專武疊影: ${info.w} 階</p>
                             </div>
-                        </div>`;
+                        </div>
+                    </div>`;
                 }).join('');
 
-                card.innerHTML = `
-                    <div class="flex flex-col lg:flex-row gap-8">
-                        <div class="lg:w-1/3 lg:border-r border-gray-800 lg:pr-8">
-                            <details class="group bg-black/40 rounded-xl border border-gray-700/50 open:bg-[#111216] open:border-gray-600 transition-all duration-300 shadow-inner">
-                                <summary class="p-4 text-sm font-bold text-gray-400 outline-none cursor-pointer hover:text-white flex justify-between items-center select-none">
-                                    <span class="flex items-center gap-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-600" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
-                                        </svg>
-                                        點擊顯示帳號密碼
-                                    </span>
-                                    <span class="group-open:rotate-180 transition-transform duration-300 text-xs">▼</span>
-                                </summary>
-                                <div class="p-4 pt-0 space-y-4 mt-2 border-t border-gray-800/50 mt-2 pt-4">
-                                    <div>
-                                        <label class="text-[10px] text-gray-500 font-bold mb-1 block tracking-widest">遊戲帳號</label>
-                                        <div onclick="copyText('${acc["帳號"]}@outlook.com', this)" class="group flex justify-between items-center cursor-pointer text-white font-mono bg-black px-3 py-2 rounded-lg border border-white/10 hover:border-white/30 transition">
-                                            <span class="truncate mr-2">${acc["帳號"]}@outlook.com</span>
-                                            <span class="copy-hint flex-shrink-0 text-[10px] font-bold text-gray-600 group-hover:text-yellow-500 transition">點擊複製</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="text-[10px] text-gray-500 font-bold mb-1 block tracking-widest">遊戲密碼</label>
-                                        <div onclick="copyText('${acc["密碼"]}', this)" class="group flex justify-between items-center cursor-pointer text-yellow-500 font-mono bg-black px-3 py-2 rounded-lg border border-white/10 hover:border-yellow-500/50 transition">
-                                            <span class="truncate mr-2">${acc["密碼"]}</span>
-                                            <span class="copy-hint flex-shrink-0 text-[10px] font-bold text-gray-600 group-hover:text-yellow-500 transition">點擊複製</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </details>
+                return `
+                <div class="acc-card p-6">
+                    <details class="group">
+                        <summary class="summary-box p-4 flex justify-between items-center cursor-pointer mb-6">
+                            <div class="flex items-center gap-3"><span class="text-yellow-600 text-lg">🔒</span><span class="text-gray-400 font-bold text-sm tracking-wider">點擊顯示帳號密碼</span></div>
+                            <span class="text-gray-400 group-open:rotate-180 transition-transform duration-300">▼</span>
+                        </summary>
+                        <div class="grid grid-cols-1 gap-3 mb-6 px-1 text-xs">
+                            <div onclick="navigator.clipboard.writeText('${acc["帳號"]}@outlook.com'); alert('帳號已複製')" class="bg-black/50 p-4 rounded-2xl border border-gray-800 flex justify-between items-center cursor-pointer">
+                                <div><p class="text-[9px] text-gray-500 font-bold uppercase mb-1">遊戲帳號</p><span class="text-white font-mono">${acc["帳號"]}@outlook.com</span></div>
+                                <span class="text-yellow-600 font-bold">複製</span>
+                            </div>
+                            <div onclick="navigator.clipboard.writeText('${acc["密碼"]}'); alert('密碼已複製')" class="bg-black/50 p-4 rounded-2xl border border-gray-800 flex justify-between items-center cursor-pointer">
+                                <div><p class="text-[9px] text-gray-500 font-bold uppercase mb-1">遊戲密碼</p><span class="text-yellow-600 font-mono">${acc["密碼"]}</span></div>
+                                <span class="text-yellow-600 font-bold">複製</span>
+                            </div>
                         </div>
-                        <div class="lg:w-2/3">
-                             <label class="text-[12px] text-gray-500 tracking-widest font-bold mb-4 block flex items-center gap-2">
-                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                                 角色與裝備配置
-                             </label>
-                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                ${configHtml}
-                             </div>
+                    </details>
+                    
+                    <div>
+                        <div class="flex items-center gap-2 mb-4 px-1">
+                            <span class="text-gray-600">👥</span>
+                            <span class="text-gray-500 font-bold text-[11px] uppercase tracking-[0.2em]">角色與裝備配置</span>
                         </div>
+                        <div class="grid grid-cols-1 gap-2">${cfgs}</div>
                     </div>
-                `;
-                list.appendChild(card);
-            });
+                </div>`;
+            }).join('');
         }
 
-        // 啟動
         fetchData();
     </script>
 </body>
