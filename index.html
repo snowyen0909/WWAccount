@@ -80,6 +80,7 @@
             
             if(currentFilter==='has6') data = data.filter(a => a["內容配置"].some(c => parseCfg(c).c === '6'));
             if(currentFilter==='no6') data = data.filter(a => !a["內容配置"].some(c => parseCfg(c).c === '6'));
+            
             if(searchQuery) data = data.filter(a => a["內容配置"].some(c => parseCfg(c).n.toLowerCase().includes(searchQuery)));
             
             const list = document.getElementById('account-list');
@@ -109,14 +110,20 @@
                     </div>`;
                 }).join('');
 
-                // 動態組合信箱後綴 (若舊資料無後綴，則預設 @outlook.com)
                 const fullEmail = `${acc["帳號"]}${acc["後綴"] || '@outlook.com'}`;
+                
+                // 🔥 ✅ 換成 🔥，✖️ 保留
+                const builtStatusIcon = acc["有練度"] ? '<span class="text-sm ml-2" title="高練度">🔥</span>' : '<span class="text-sm ml-2 opacity-30" title="無練度">✖️</span>';
 
                 return `
                 <div class="acc-card p-6">
                     <details class="group">
                         <summary class="summary-box p-4 flex justify-between items-center cursor-pointer mb-6">
-                            <div class="flex items-center gap-3"><span class="text-yellow-600 text-lg">🔒</span><span class="text-gray-400 font-bold text-sm tracking-wider">點擊顯示帳號密碼</span></div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-yellow-600 text-lg">🔒</span>
+                                <span class="text-gray-400 font-bold text-sm tracking-wider">點擊顯示帳號密碼</span>
+                                ${acc["有練度"] ? '<span class="bg-red-900/40 border border-red-500/50 text-red-500 px-2 py-0.5 rounded-lg text-[10px] font-bold tracking-widest hidden md:inline-block">🔥 高練度</span>' : ''}
+                            </div>
                             <span class="text-gray-400 group-open:rotate-180 transition-transform duration-300">▼</span>
                         </summary>
                         <div class="grid grid-cols-1 gap-3 mb-6 px-1 text-xs">
@@ -134,7 +141,9 @@
                     <div>
                         <div class="flex items-center gap-2 mb-4 px-1">
                             <span class="text-gray-600">👥</span>
-                            <span class="text-gray-500 font-bold text-[11px] uppercase tracking-[0.2em]">角色與裝備配置</span>
+                            <span class="text-gray-500 font-bold text-[11px] uppercase tracking-[0.2em] flex items-center">
+                                角色與裝備配置 ${builtStatusIcon}
+                            </span>
                         </div>
                         <div class="grid grid-cols-1 gap-2">${cfgs}</div>
                     </div>
