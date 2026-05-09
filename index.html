@@ -15,12 +15,13 @@
         .tag-other { background-color: #1e2024; color: #9ca3af; border: 1px solid #2d2f36; }
         .char-bg-watermark { position: absolute; right: 0; top: 0; height: 100%; opacity: 0.15; mask-image: linear-gradient(to left, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%); }
         details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
     </style>
 </head>
 <body class="text-gray-300 p-6 md:p-10">
 
     <div class="max-w-2xl mx-auto">
-        <header class="mb-10 text-center md:text-left">
+        <header class="mb-8 text-center md:text-left">
             <h1 class="text-4xl font-black text-white italic tracking-tighter">WUWA <span class="text-yellow-500">ARCHIVE</span></h1>
             <p class="text-[10px] text-gray-600 mt-2 tracking-[0.3em] uppercase flex items-center justify-center md:justify-start gap-2">
                 <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> 數據已同步
@@ -30,13 +31,31 @@
         <div class="flex flex-wrap gap-2 mb-4">
             <button onclick="applyFilter('all')" id="btn-all" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-black transition shadow-lg">全部顯示</button>
             <button onclick="applyFilter('has6')" id="btn-has6" class="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 bg-[#1e2024] border border-gray-800 hover:text-white transition">包含滿命 (6鏈)</button>
+            <button onclick="applyFilter('built')" id="btn-built" class="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 bg-[#1e2024] border border-gray-800 hover:text-white transition">🔥 有練度</button>
             <button onclick="applyFilter('no6')" id="btn-no6" class="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 bg-[#1e2024] border border-gray-800 hover:text-white transition">無滿命</button>
         </div>
 
-        <div class="relative group mb-10">
+        <div class="relative group mb-6">
             <input type="text" id="search-input" onkeyup="handleSearch()" placeholder="搜尋角色名稱 (例如: 西格莉卡)" class="w-full bg-[#16171a] border border-gray-800 text-white text-sm px-5 py-3.5 rounded-2xl focus:outline-none focus:border-gray-600 transition">
             <svg xmlns="http://www.w3.org/2000/svg" class="absolute right-4 top-4 h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
         </div>
+
+        <details class="mb-10 bg-[#1a1b1e] border border-gray-800 rounded-2xl group" open>
+            <summary class="p-5 flex justify-between items-center cursor-pointer outline-none select-none">
+                <div>
+                    <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest flex items-center gap-2">
+                        限定角色檢索
+                        <span class="text-gray-600 group-open:rotate-180 transition-transform duration-300">▼</span>
+                    </p>
+                    <p class="text-[9px] text-gray-600 mt-1">點擊頭像即可篩選出擁有該角色的帳號 (可多選)</p>
+                </div>
+                <button onclick="clearCharSelection(); event.preventDefault();" class="text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-400 px-3 py-1.5 rounded-lg transition font-bold">清空選擇</button>
+            </summary>
+            
+            <div class="p-5 pt-0 border-t border-gray-800/50 mt-2">
+                <div id="char-filter-grid" class="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-3 pt-4"></div>
+            </div>
+        </details>
 
         <div id="account-list" class="space-y-6 pb-20"></div>
         <div id="empty-state" class="hidden text-center py-20 text-gray-600 italic tracking-widest">NO RECORDS FOUND</div>
@@ -44,19 +63,62 @@
 
     <script>
         const API_BASE = 'https://wuwa-api.andy96990808.workers.dev'; 
-        let charImages = {}, allAccountsData = [], currentFilter = 'all', searchQuery = '';
+        let charImages = {};
+        let allAccountsData = [];
+        let excludedChars = []; 
+        let currentFilter = 'all';
+        let searchQuery = '';
+        let selectedChars = [];
 
         async function fetchData() {
             try {
-                const [accRes, imgRes] = await Promise.all([
+                const [accRes, imgRes, exclRes] = await Promise.all([
                     fetch(`${API_BASE}?type=accounts&t=${Date.now()}`),
-                    fetch(`${API_BASE}?type=images&t=${Date.now()}`)
+                    fetch(`${API_BASE}?type=images&t=${Date.now()}`),
+                    fetch(`${API_BASE}?type=excluded&t=${Date.now()}`)
                 ]);
                 allAccountsData = await accRes.json();
                 charImages = await imgRes.json();
+                
+                try {
+                    excludedChars = await exclRes.json();
+                } catch(e) { excludedChars = []; }
+                
+                if (!Array.isArray(excludedChars) || excludedChars.length === 0) {
+                    excludedChars = ['維里奈', '安可', '卡卡羅', '鑒心', '凌陽', '白芷', '秧秧', '熾霞', '散華', '丹瑾', '莫特斐', '秋水', '淵武', '桃祈', '燈燈', '釉瑚', '漂泊者-氣動', '漂泊者-湮滅', '漂泊者-衍射'];
+                }
+                
+                renderCharFilterGrid(); 
                 updateView();
             } catch (e) { console.error(e); }
         }
+
+        function renderCharFilterGrid() {
+            const grid = document.getElementById('char-filter-grid');
+            
+            const availableChars = Object.keys(charImages).filter(c => !excludedChars.includes(c));
+
+            grid.innerHTML = availableChars.map(c => {
+                const isSelected = selectedChars.includes(c);
+                const borderClass = isSelected ? 'border-yellow-500 shadow-[0_0_10px_rgba(245,158,11,0.5)] scale-105' : 'border-gray-800 opacity-50 hover:opacity-100 hover:border-gray-600';
+                const textClass = isSelected ? 'text-yellow-500 font-black' : 'text-gray-500 font-medium group-hover:text-gray-300';
+                
+                return `
+                <div onclick="toggleChar('${c}')" class="cursor-pointer transition-all duration-200 flex flex-col items-center gap-1.5 group select-none">
+                    <img src="${charImages[c]}" class="w-10 h-10 md:w-12 md:h-12 rounded-xl border-2 ${borderClass} object-cover bg-gray-900 transition-all duration-200">
+                    <span class="text-[9px] text-center w-full truncate ${textClass}">${c}</span>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function toggleChar(charName) {
+            if (selectedChars.includes(charName)) selectedChars = selectedChars.filter(c => c !== charName);
+            else selectedChars.push(charName);
+            renderCharFilterGrid(); updateView();
+        }
+
+        function clearCharSelection() { selectedChars = []; renderCharFilterGrid(); updateView(); }
 
         function parseCfg(s) {
             const m = s.match(/^(\d+)\+(\d+)(.+)$/);
@@ -65,7 +127,7 @@
 
         function applyFilter(t) {
             currentFilter = t;
-            ['all','has6','no6'].forEach(id => {
+            ['all','has6','built','no6'].forEach(id => {
                 document.getElementById('btn-'+id).className = id===t 
                     ? "px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-black transition shadow-lg" 
                     : "px-5 py-2.5 rounded-xl text-sm font-bold text-gray-400 bg-[#1e2024] border border-gray-800 hover:text-white transition";
@@ -79,9 +141,17 @@
             let data = allAccountsData;
             
             if(currentFilter==='has6') data = data.filter(a => a["內容配置"].some(c => parseCfg(c).c === '6'));
+            if(currentFilter==='built') data = data.filter(a => a["有練度"]);
             if(currentFilter==='no6') data = data.filter(a => !a["內容配置"].some(c => parseCfg(c).c === '6'));
             
             if(searchQuery) data = data.filter(a => a["內容配置"].some(c => parseCfg(c).n.toLowerCase().includes(searchQuery)));
+            
+            if(selectedChars.length > 0) {
+                data = data.filter(a => {
+                    const accountCharNames = a["內容配置"].map(c => parseCfg(c).n);
+                    return selectedChars.every(sc => accountCharNames.includes(sc));
+                });
+            }
             
             const list = document.getElementById('account-list');
             if(data.length === 0) { document.getElementById('empty-state').classList.remove('hidden'); list.innerHTML = ''; return; }
@@ -111,9 +181,7 @@
                 }).join('');
 
                 const fullEmail = `${acc["帳號"]}${acc["後綴"] || '@outlook.com'}`;
-                
-                // 🔥 ✅ 換成 🔥，✖️ 保留
-                const builtStatusIcon = acc["有練度"] ? '<span class="text-sm ml-2" title="高練度">🔥</span>' : '<span class="text-sm ml-2 opacity-30" title="無練度">✖️</span>';
+                const builtStatusIcon = acc["有練度"] ? '<span class="text-sm ml-2" title="有練度">🔥</span>' : '<span class="text-sm ml-2 opacity-30" title="無練度">✖️</span>';
 
                 return `
                 <div class="acc-card p-6">
